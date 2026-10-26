@@ -1,24 +1,66 @@
 # my-skills
 
-个人 skill 集合，供 agent（dsh、Claude Code 等）按需加载。每个 skill 是自包含的一个目录，包含说明文档与可选的脚本/资源。
+个人 skill 集合，供 dsh、Claude Code 等 agent 按需加载。每个 skill 是一个自包含目录：`SKILL.md` 是入口，脚本、模板等资源放在同目录下。
+
+## 技能
+
+| 技能 | 调用 | 用途 |
+| --- | --- | --- |
+| [`anti-drift`](skills/anti-drift/SKILL.md) | `/anti-drift` | 以交付物为边界，约束取证范围并及时收敛任务。 |
+| [`qnw-gitee`](skills/qnw-gitee/SKILL.md) | `/qnw-gitee` | Gitee / gitee-cli 操作手册，含企业仓库 issue/PR 的实测命令与专属规则。 |
+| [`_template`](skills/_template/SKILL.md) | — | 新建 skill 的模板，不挂载、不直接调用。 |
+
+两个正式技能都设置了 `disable-model-invocation: true`，只能由人显式调用（dsh 中输入上表的 `/...`），不会自动加载。`qnw-gitee` 中的工作项状态 id 等企业专属值是 row_rabbit 的实测结果，换企业时按该技能「状态 id 获取法」现取，不要照抄。
 
 ## 目录结构
 
 ```
 my-skills/
 ├── README.md
+├── LICENSE
 └── skills/
-    ├── _template/          # 新建 skill 时复制这个目录
+    ├── _template/
     │   └── SKILL.md
-    └── <skill-name>/       # 一个 skill 一个目录
-        ├── SKILL.md        # 必需：入口说明
-        └── ...             # 可选：脚本、模板、参考资料
+    ├── anti-drift/
+    │   └── SKILL.md
+    └── qnw-gitee/
+        ├── SKILL.md
+        ├── ISSUE-TRACKER-TEMPLATE.md
+        └── agents/
+            └── openai.yaml
 ```
+
+## 挂载到本机
+
+dsh 从 `$DSH_HOME/skills/` 读取 skill。克隆仓库后，按需为单个技能建立链接；`_template` 无需挂载。
+
+```powershell
+git clone https://github.com/QianNianwen/my-skills.git F:\PROJECT\my-skills
+
+$skill = "anti-drift"
+New-Item -ItemType SymbolicLink `
+  -Path "$env:DSH_HOME\skills\$skill" `
+  -Target "F:\PROJECT\my-skills\skills\$skill"
+```
+
+Windows 建符号链接需要开发者模式或管理员权限；没有权限时改用目录联接：
+
+```powershell
+cmd /c mklink /J "%DSH_HOME%\skills\anti-drift" "F:\PROJECT\my-skills\skills\anti-drift"
+```
+
+macOS / Linux：
+
+```bash
+ln -s /path/to/my-skills/skills/anti-drift "$DSH_HOME/skills/anti-drift"
+```
+
+Claude Code 等其他 agent 按其 skill 目录约定放置或链接，技能内容本身不变。
 
 ## skill 约定
 
-- 目录名用小写加连字符：`code-review`、`writing-for-agents`。
-- `SKILL.md` 必须以 YAML frontmatter 开头，两个字段必填：
+- 目录名用小写加连字符：`code-review`、`writing-for-agents`；`_template` 是唯一例外。
+- `SKILL.md` 以 YAML frontmatter 开头，`name`、`description` 必填；`name` 是调用名，建议与目录名一致：
 
   ```yaml
   ---
@@ -27,45 +69,24 @@ my-skills/
   ---
   ```
 
-- `description` 决定 agent 会不会自动加载该 skill，写"什么时候用"而不是"这是什么"。
-- 正文用祈使句写给 agent 看的操作指令，避免空泛描述。
-- 大文件（图片、数据）放 `assets/`，引用时用相对路径。
+- 默认是 model-invoked：`description` 常驻上下文，决定 agent 是否自动加载，写“什么时候用”而不是“这是什么”。
+- 只由人工显式调用时，加 `disable-model-invocation: true`；此时 `description` 转为给人看的一句话摘要，不再参与自动发现。
+- 正文用祈使句写给 agent，步骤写清完成判据；大文件（图片、数据）放 `assets/`，引用时用相对路径。
+- 平台附加的展示元数据可放 `agents/`（如 `agents/openai.yaml`），不影响 dsh 加载。
 
 ## 新增一个 skill
 
 1. 复制模板：`cp -r skills/_template skills/my-new-skill`
-2. 改 `name` 与 `description`，补正文。
-3. 本地验证：让 agent 读一遍 `SKILL.md`，确认它能照做。
+2. 改 `name` 与 `description`，补正文；手动调用的技能加上 `disable-model-invocation: true`。
+3. 本地挂载后让 agent 读一遍 `SKILL.md`，确认它能照做。
 4. 提交：`git add skills/my-new-skill && git commit -m "add: my-new-skill"`
-
-## 在本机挂载
-
-dsh 从 `$DSH_HOME/skills/` 读取 skill。仓库克隆到本地后，用目录联接或符号链接挂进去：
-
-```powershell
-# 单个 skill
-New-Item -ItemType SymbolicLink -Path "$env:DSH_HOME\skills\my-new-skill" -Target "F:\PROJECT\my-skills\skills\my-new-skill"
-```
-
-Windows 建符号链接需要开发者模式或管理员权限；没有权限时用 `mklink /J` 做目录联接。
 
 ## 许可
 
-本项目采用 **GNU AGPL-3.0**（GNU Affero General Public License v3.0），法律全文见 [LICENSE](LICENSE)，官方说明见 <https://www.gnu.org/licenses/agpl-3.0.html>（以英文原文为准，中文译文仅供参考）。
+本项目采用 **GNU AGPL-3.0**（SPDX：`AGPL-3.0-only`），法律全文见 [LICENSE](LICENSE)，官方说明见 <https://www.gnu.org/licenses/agpl-3.0.html>。
+
+- 分发本项目或修改版，或将其作为网络服务提供，须以 AGPL-3.0 提供完整对应源码，并保留版权与许可声明。
+- 允许商业使用；不愿承担上述开源义务的，需另行取得商业授权。
+- 修改版须显著标注改动内容与日期。
 
 Copyright (C) 2026 QianNianwen
-
-三条核心义务：
-
-- **必须开源**：分发本项目或其修改版时，必须提供完整的对应源码，并以 AGPL-3.0 授权。
-- **网络使用也算分发**：把修改版部署成网络服务供他人使用，也必须向使用者提供源码。这是 AGPL 相对 GPL 的关键差别，也是"要用就必须开源"最硬的约束。
-- **保留声明**：不得移除版权声明与许可证文本，修改版须显著标注改动内容与日期。
-
-**允许商业使用。** 商业方若不愿承担上述开源义务，只能另行取得商业授权 —— 换句话说，想商用又不想开源，是不被允许的。
-
-SPDX 标识：`AGPL-3.0-only`（若允许他人按未来版本再授权，写 `AGPL-3.0-or-later`）。
-
-### 与其他许可证的关系
-
-- 相比之前的 CC BY-NC-SA：AGPL 管住了网络服务场景，且**允许商用**，因此是 OSI 认证的真正开源许可证，GitHub 也能正确识别。
-- AGPL-3.0 与 GPL-3.0 兼容，两者代码可组合，组合后的整体按 AGPL-3.0 分发（FSF 已明确）。
